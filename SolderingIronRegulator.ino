@@ -1,18 +1,29 @@
 #include <TM1637.h>
 #include <EEPROM.h>
 
+#define BTN_UP 0    // digital 0
 #define KEY 1
-#define BTN_UP 0
 #define BTN_DOWN 2
 #define DIO 3
 #define CLK 4
+#define BTN_ONOFF 0 // analog 0
+
+#define STATE_OFF 0
+#define STATE_ON 1
+#define STATE_START 2
+#define STATE_STOP 3
 
 TM1637 disp(CLK, DIO);
 const long timePeriodMax = 1000;
 const long timePeriodMin = 500;
+const int startTimeLong = 120;
 int timeOn;
 bool btnUpPressed;
 bool btnDnPressed;
+bool btnOnOffIsPressed = false;
+bool btnOnOffWasPressed = false;
+byte state = 0;
+unsigned long timeStart;
 
 void setup() {
   timeOn = readTimeOn();
@@ -21,41 +32,78 @@ void setup() {
   pinMode(BTN_DOWN, INPUT_PULLUP);
   disp.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
   disp.init();
-
-  show(1000);
-  digitalWrite(KEY, HIGH);
-  delay(1000 * 60 * 2); // 2 minute
-  delay(1000);
+  state = STATE_STOP;
 }
 
-void loop() {
-  btnUpPressed = !digitalRead(BTN_UP);
-  btnDnPressed = !digitalRead(BTN_DOWN);
+void loop()
+{
+  btnOnOffIsPressed = 800 > analogRead(BTN_ONOFF);
 
-  if (btnUpPressed && btnDnPressed)
+  if (btnOnOffIsPressed && !btnOnOffWasPressed)
   {
-    saveTimeOn(timeOn);
-  }
-  else if (btnUpPressed)
-  {
-    timeOn = increaseTimeOn(timeOn);
-  }
-  else if (btnDnPressed)
-  {
-    timeOn = decreaseTimeOn(timeOn);
+    if (state == STATE_OFF)
+    {
+      state = STATE_START;
+      timeStart =  millis();
+      timeOn = timePeriodMax;
+      show(timeOn);
+      digitalWrite(KEY, HIGH);
+    }
+    else
+    {
+      state = STATE_STOP;
+    }
   }
 
-  disp.point(POINT_ON);
-  show(timeOn);
-  digitalWrite(KEY, 1);
-  delay(timeOn);
+  btnOnOffWasPressed = btnOnOffIsPressed;
 
-  if (timePeriodMax > timeOn)
+  if (state == STATE_STOP)
   {
-    digitalWrite(KEY, 0);
-    disp.point(POINT_OFF);
+    state = STATE_OFF;
+    timeOn = 0;
+    digitalWrite(KEY, timeOn);
+    showOff();
+  }
+
+  if (state == STATE_START)
+  {
+    long t = (millis() - timeStart) / 1000;
+    if ( t > startTimeLong)
+    {
+      state = STATE_ON;
+      timeOn = readTimeOn();
+    }
+  }
+
+  if (state == STATE_ON)
+  {
+    btnUpPressed = !digitalRead(BTN_UP);
+    btnDnPressed = !digitalRead(BTN_DOWN);
+    if (btnUpPressed && btnDnPressed)
+    {
+      saveTimeOn(timeOn);
+    }
+    else if (btnUpPressed)
+    {
+      timeOn = increaseTimeOn(timeOn);
+    }
+    else if (btnDnPressed)
+    {
+      timeOn = decreaseTimeOn(timeOn);
+    }
+
+    disp.point(POINT_ON);
     show(timeOn);
-    delay(timePeriodMax - timeOn);
+    digitalWrite(KEY, 1);
+    delay(timeOn);
+
+    if (timePeriodMax > timeOn)
+    {
+      digitalWrite(KEY, 0);
+      disp.point(POINT_OFF);
+      show(timeOn);
+      delay(timePeriodMax - timeOn);
+    }
   }
 }
 
@@ -95,13 +143,17 @@ int checkRange(int timeOn)
 
 void show(int number)
 {
+  byte blank = 0x7f;
   number = number / 10;
   byte s = number / 100;
   number = number - s * 100;
   byte d = number / 10 ;
   byte e = number - d * 10;
 
-  disp.display(0, 0);
+  if (s == 0) s = blank;
+  if (s + d == 0) d = blank;
+
+  disp.display(0, blank);
   disp.display(1, s);
   disp.display(2, d);
   disp.display(3, e);
@@ -120,7 +172,7 @@ int readTimeOn()
   r = EEPROM.read(1) * 256;
   r = r + EEPROM.read(2);
   r = checkRange(r);
-  doBlink();
+  //doBlink();
   return r;
 }
 
@@ -133,4 +185,10 @@ void doBlink()
     show(timeOn);
     delay(300);
   }
+}
+
+void showOff()
+{
+  disp.point(POINT_ON);
+  disp.clearDisplay();
 }
