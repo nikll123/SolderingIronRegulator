@@ -1,9 +1,9 @@
 #include <TM1637.h>
 #include <EEPROM.h>
 
-#define BTN_UP 0    // digital 0
+#define BTN_INCREASE 0    // increase time
 #define KEY 1
-#define BTN_DOWN 2
+#define BTN_DECREASE 2  // decrease time
 #define DIO 3
 #define CLK 4
 #define BTN_ONOFF 0 // analog 0
@@ -18,8 +18,8 @@ const long timePeriodMax = 1000;
 const long timePeriodMin = 500;
 const int startTimeLong = 120;
 int timeOn;
-bool btnUpPressed;
-bool btnDnPressed;
+bool btnIncPressed;
+bool btnDecPressed;
 bool btnOnOffIsPressed = false;
 bool btnOnOffWasPressed = false;
 byte state = 0;
@@ -28,8 +28,8 @@ unsigned long timeStart;
 void setup() {
   timeOn = readTimeOn();
   pinMode(KEY, OUTPUT);
-  pinMode(BTN_UP, INPUT_PULLUP);
-  pinMode(BTN_DOWN, INPUT_PULLUP);
+  pinMode(BTN_INCREASE, INPUT_PULLUP);
+  pinMode(BTN_DECREASE, INPUT_PULLUP);
   disp.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
   disp.init();
   state = STATE_STOP;
@@ -37,7 +37,9 @@ void setup() {
 
 void loop()
 {
-  btnOnOffIsPressed = 800 > analogRead(BTN_ONOFF);
+  int i = analogRead(BTN_ONOFF);
+  //  showOnOffLevel(i);
+  btnOnOffIsPressed = 900 > i;
 
   if (btnOnOffIsPressed && !btnOnOffWasPressed)
   {
@@ -57,56 +59,59 @@ void loop()
 
   btnOnOffWasPressed = btnOnOffIsPressed;
 
-  if (state == STATE_STOP)
+  switch  (state)
   {
-    state = STATE_OFF;
-    timeOn = 0;
-    digitalWrite(KEY, timeOn);
-    showOff();
-  }
+    case  STATE_STOP:
+      {
+        state = STATE_OFF;
+        timeOn = 0;
+        digitalWrite(KEY, timeOn);
+        showOff();
+      }
+      break;
+    case  STATE_START:
+      {
+        long t = (millis() - timeStart) / 1000;
+        if ( t > startTimeLong)
+        {
+          state = STATE_ON;
+          timeOn = readTimeOn();
+        }
+      }
+      break;
+    case  STATE_ON:
+      {
+        btnIncPressed = !digitalRead(BTN_INCREASE);
+        btnDecPressed = !digitalRead(BTN_DECREASE);
+        if (btnIncPressed && btnDecPressed)
+        {
+          saveTimeOn(timeOn);
+        }
+        else if (btnIncPressed)
+        {
+          timeOn = increaseTimeOn(timeOn);
+        }
+        else if (btnDecPressed)
+        {
+          timeOn = decreaseTimeOn(timeOn);
+        }
 
-  if (state == STATE_START)
-  {
-    long t = (millis() - timeStart) / 1000;
-    if ( t > startTimeLong)
-    {
-      state = STATE_ON;
-      timeOn = readTimeOn();
-    }
-  }
+        disp.point(POINT_ON);
+        show(timeOn);
+        digitalWrite(KEY, 1);
+        delay(timeOn);
 
-  if (state == STATE_ON)
-  {
-    btnUpPressed = !digitalRead(BTN_UP);
-    btnDnPressed = !digitalRead(BTN_DOWN);
-    if (btnUpPressed && btnDnPressed)
-    {
-      saveTimeOn(timeOn);
-    }
-    else if (btnUpPressed)
-    {
-      timeOn = increaseTimeOn(timeOn);
-    }
-    else if (btnDnPressed)
-    {
-      timeOn = decreaseTimeOn(timeOn);
-    }
-
-    disp.point(POINT_ON);
-    show(timeOn);
-    digitalWrite(KEY, 1);
-    delay(timeOn);
-
-    if (timePeriodMax > timeOn)
-    {
-      digitalWrite(KEY, 0);
-      disp.point(POINT_OFF);
-      show(timeOn);
-      delay(timePeriodMax - timeOn);
-    }
+        if (timePeriodMax > timeOn)
+        {
+          digitalWrite(KEY, 0);
+          disp.point(POINT_OFF);
+          show(timeOn);
+          delay(timePeriodMax - timeOn);
+        }
+      }
+      break;
   }
 }
-
 
 int increaseTimeOn(int timeOn)
 {
@@ -191,4 +196,15 @@ void showOff()
 {
   disp.point(POINT_ON);
   disp.clearDisplay();
+}
+
+void showOnOffLevel (int i)
+{
+  for (int j = 0; j < 5; j++)
+  {
+    disp.clearDisplay();
+    delay(50);
+    show(i * 10);
+    delay(50);
+  }
 }
