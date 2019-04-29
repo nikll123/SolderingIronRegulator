@@ -32,7 +32,7 @@ void setup() {
   pinMode(BTN_DECREASE, INPUT_PULLUP);
   disp.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
   disp.init();
-  state = STATE_STOP;
+  doStart() ;
 }
 
 void loop()
@@ -45,11 +45,7 @@ void loop()
   {
     if (state == STATE_OFF)
     {
-      state = STATE_START;
-      timeStart =  millis();
-      timeOn = timePeriodMax;
-      show(timeOn);
-      digitalWrite(KEY, HIGH);
+      doStart() ;
     }
     else
     {
@@ -198,7 +194,7 @@ void showOff()
   disp.clearDisplay();
 }
 
-void showOnOffLevel (int i)
+void showOnOffLevel (int i)   // mostly for debug purposes
 {
   for (int j = 0; j < 5; j++)
   {
@@ -207,4 +203,13 @@ void showOnOffLevel (int i)
     show(i * 10);
     delay(50);
   }
+}
+
+void doStart ()
+{
+  state = STATE_START;
+  timeStart =  millis();
+  timeOn = timePeriodMax;
+  show(timeOn);
+  digitalWrite(KEY, HIGH);
 }
